@@ -12,9 +12,35 @@ The :mod:`sqlparse` module provides the following functions on module-level.
 
 .. autofunction:: sqlparse.parse
 
-In most cases there's no need to set the `encoding` parameter. If
-`encoding` is not set, sqlparse assumes that the given SQL statement
+.. autoclass:: sqlparse.RedactedSQL
+
+.. autoclass:: sqlparse.RedactionOptions
+
+.. autofunction:: sqlparse.redact
+
+In most cases there's no need to set the ``encoding`` parameter. If
+``encoding`` is not set, sqlparse assumes that the given SQL statement
 is encoded either in utf-8 or latin-1.
+
+
+Redacting SQL for diagnostic logs
+---------------------------------
+
+The :meth:`~sqlparse.redact` function returns a
+:class:`~sqlparse.RedactedSQL` value containing display text, a normalized
+query shape, and a stable ``shape_id``.
+
+String, numeric, and boolean literals are replaced by configurable markers.
+Existing bind placeholders are left intact in the display text, but use the
+fixed shape marker ``:BIND`` so literal values and supplied parameters remain
+separate categories. A large ``IN`` list is collapsed into one placeholder
+once it reaches ``in_list_threshold`` (default: five values).
+
+Ordinary comments are removed by default. Optimizer hints never contribute to
+the query shape. They can be removed, masked, or retained in the display text
+with ``hint_policy`` set to ``"strip"``, ``"mask"``, or ``"preserve"``.
+Unparseable fragments, including unterminated quotes, dollar-quoted strings,
+or comments, are replaced with the unknown marker.
 
 
 .. _formatting:
