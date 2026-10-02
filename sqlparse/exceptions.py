@@ -10,3 +10,8 @@
 
 class SQLParseError(Exception):
     """Base class for exceptions in this module."""
+
+
+class ParameterStyleConflict(SQLParseError):
+    """Raised when the placeholders in a statement do not match the
+    requested parameter style."""

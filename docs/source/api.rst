@@ -12,9 +12,30 @@ The :mod:`sqlparse` module provides the following functions on module-level.
 
 .. autofunction:: sqlparse.parse
 
+.. autofunction:: sqlparse.parameters
+
 In most cases there's no need to set the `encoding` parameter. If
 `encoding` is not set, sqlparse assumes that the given SQL statement
 is encoded either in utf-8 or latin-1.
+
+
+Inspecting Bind Parameters
+--------------------------
+
+The :meth:`~sqlparse.parameters` function analyzes a SQL template and
+reports the bind parameters it expects, without interpolating or
+executing the statement. It recognizes the DB-API 2.0 paramstyles
+``qmark`` (``?``), ``numeric`` (``:1``, ``$1``), ``named`` (``:name``,
+``$name``), ``format`` (``%s``) and ``pyformat`` (``%(name)s``).
+Placeholders inside string literals, quoted identifiers and comments
+are ignored, as are PostgreSQL ``::`` casts and ``%%`` escapes.
+
+Pass ``style`` to declare the expected paramstyle; placeholders of any
+other style then raise
+:class:`~sqlparse.exceptions.ParameterStyleConflict`. Without ``style``
+the paramstyle is detected automatically, and the returned
+:class:`~sqlparse.params.ParameterReport` is marked ``ambiguous``
+(with an empty parameter list) when more than one style is found.
 
 
 .. _formatting:

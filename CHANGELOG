@@ -1,7 +1,13 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Add `sqlparse.parameters()` to inspect the bind parameters a SQL
+  template expects. It recognizes the DB-API 2.0 paramstyles `qmark`,
+  `numeric`, `named`, `format` and `pyformat`, reports each parameter's
+  name or position, reuse count and offsets in the original statement,
+  and skips placeholders inside strings, quoted identifiers and comments.
 
 
 Release 0.6.0 (Aug 13, 2026)

@@ -11,10 +11,10 @@
 from collections.abc import Generator
 from typing import IO, Any
 
-from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse import cli, engine, filters, formatter, params, sql, tokens
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = ["cli", "engine", "filters", "formatter", "params", "sql", "tokens"]
 
 
 def parse(
@@ -73,3 +73,24 @@ def split(
     """
     stack = engine.FilterStack(strip_semicolon=strip_semicolon)
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]
+
+
+def parameters(
+    sql: str, style: str | None = None, encoding: str | None = None
+) -> params.ParameterReport:
+    """Inspect *sql* and report the bind parameters its template expects.
+
+    The statement is only analyzed, never interpolated or executed.
+    Recognizes the DB-API 2.0 paramstyles ``qmark``, ``numeric``,
+    ``named``, ``format`` and ``pyformat``.
+
+    :param sql: A string containing one or more SQL statements.
+    :param style: Declare the expected parameter style (optional).
+        Placeholders of any other style raise
+        :class:`~sqlparse.exceptions.ParameterStyleConflict`.
+        If not given, the style is detected automatically; the report
+        is ambiguous when more than one style is present.
+    :param encoding: The encoding of the statement (optional).
+    :returns: A :class:`~sqlparse.params.ParameterReport` instance.
+    """
+    return params.find(sql, style=style, encoding=encoding)
