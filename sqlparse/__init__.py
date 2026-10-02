@@ -11,10 +11,32 @@
 from collections.abc import Generator
 from typing import IO, Any
 
-from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse import cli, engine, filters, formatter, params, sql, tokens
+from sqlparse.params import (
+    ParamOccurrence,
+    Parameter,
+    ParameterList,
+    ParameterStyleConflict,
+    ParamStyle,
+    extract_parameters,
+)
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = [
+    "ParamOccurrence",
+    "Parameter",
+    "ParameterList",
+    "ParameterStyleConflict",
+    "ParamStyle",
+    "cli",
+    "engine",
+    "extract_parameters",
+    "filters",
+    "formatter",
+    "params",
+    "sql",
+    "tokens",
+]
 
 
 def parse(

@@ -1,7 +1,15 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+* New :func:`sqlparse.extract_parameters` analyzes the bind parameters
+  used by a SQL template without interpolating or executing it.
+  The ``qmark``, ``numeric``, ``named``, ``format`` and ``pyformat``
+  DB-API parameter styles are supported; the style can be selected
+  explicitly or detected automatically.  PostgreSQL ``::`` casts,
+  ``%%`` escapes, quoted identifiers, strings and comments are handled.
+  Explicit mode raises :class:`sqlparse.ParameterStyleConflict` on mixed
+  styles; automatic mode preserves the ambiguity instead of guessing.
 
 
 Release 0.6.0 (Aug 13, 2026)

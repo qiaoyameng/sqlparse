@@ -12,10 +12,68 @@ The :mod:`sqlparse` module provides the following functions on module-level.
 
 .. autofunction:: sqlparse.parse
 
+.. autofunction:: sqlparse.extract_parameters
+
 In most cases there's no need to set the `encoding` parameter. If
 `encoding` is not set, sqlparse assumes that the given SQL statement
 is encoded either in utf-8 or latin-1.
 
+
+
+.. _bind_parameters:
+
+Bind Parameters of SQL Templates
+--------------------------------
+
+:meth:`~sqlparse.extract_parameters` inspects a SQL *template* and reports
+which bind parameters an executor has to supply.  It only analyzes the
+template; it never interpolates values and never executes the SQL.
+
+The five DB-API ``paramstyle`` flavors are supported: ``qmark`` (``?``),
+``numeric`` (``:1``), ``named`` (``:name``), ``format`` (``%s``) and
+``pyformat`` (``%(name)s``).  Pass the style explicitly or let it be
+detected automatically::
+
+    >>> import sqlparse
+    >>> result = sqlparse.extract_parameters(
+    ...     "SELECT * FROM t WHERE id = :id AND id = :id", style="named")
+    >>> [(p.name, p.count) for p in result]
+    [('id', 2)]
+
+A named parameter that is reused several times is reported once; the
+number of uses and the source positions (offset and line/column) are
+available on each parameter.
+
+PostgreSQL ``::`` casts, ``%%`` escapes, quoted identifiers, string
+literals (including dollar quoted strings) and comments are not mistaken
+for parameters.
+
+When an explicit style is given but the template mixes in markers of
+another style, :class:`~sqlparse.ParameterStyleConflict` is raised.  In
+automatic mode an ambiguous template is reported with ``ambiguous=True``
+and the possible interpretations in ``candidates`` instead of guessing a
+parameter list::
+
+    >>> result = sqlparse.extract_parameters("SELECT ?, :name")
+    >>> result.ambiguous
+    True
+    >>> sorted(result.candidates)
+    ['named', 'qmark']
+
+.. autoclass:: sqlparse.ParamStyle
+   :members:
+
+.. autoclass:: sqlparse.ParameterList
+   :members:
+
+.. autoclass:: sqlparse.Parameter
+   :members:
+
+.. autoclass:: sqlparse.ParamOccurrence
+   :members:
+
+.. autoclass:: sqlparse.ParameterStyleConflict
+   :members:
 
 .. _formatting:
 
