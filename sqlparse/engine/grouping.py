@@ -8,6 +8,7 @@
 from sqlparse import sql
 from sqlparse import tokens as T
 from sqlparse.exceptions import SQLParseError
+from sqlparse.lexer import LexerConfig
 from sqlparse.utils import imt, recurse
 
 # Maximum recursion depth for grouping operations to prevent DoS attacks
@@ -439,7 +440,10 @@ def group_values(tlist):
         tlist.group_tokens(sql.Values, start_idx, end_idx, extend=True)
 
 
-def group(stmt):
+def group(stmt, lexer):
+    if not isinstance(lexer, LexerConfig):
+        raise TypeError("lexer must be a LexerConfig instance")
+
     for func in [
         group_comments,
 

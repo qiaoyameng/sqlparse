@@ -12,48 +12,85 @@ from collections.abc import Generator
 from typing import IO, Any
 
 from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse.lexer import Lexer, LexerConfig, LexerConfigBuilder
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = [
+    "cli",
+    "engine",
+    "filters",
+    "formatter",
+    "sql",
+    "tokens",
+    "Lexer",
+    "LexerConfig",
+    "LexerConfigBuilder",
+]
+
+
+def _resolve_lexer(lexer: LexerConfig | None) -> LexerConfig:
+    if lexer is None:
+        return Lexer.get_default_instance()
+    if not isinstance(lexer, LexerConfig):
+        raise TypeError("lexer must be a LexerConfig instance")
+    return lexer
 
 
 def parse(
-    sql: str, encoding: str | None = None
+    sql: str,
+    encoding: str | None = None,
+    *,
+    lexer: LexerConfig | None = None,
 ) -> tuple[sql.Statement, ...]:
     """Parse sql and return a list of statements.
 
     :param sql: A string containing one or more SQL statements.
     :param encoding: The encoding of the statement (optional).
+    :param lexer: Lexical configuration (optional).
     :returns: A tuple of :class:`~sqlparse.sql.Statement` instances.
     """
-    return tuple(parsestream(sql, encoding))
+    lexer = _resolve_lexer(lexer)
+    return tuple(parsestream(sql, encoding, lexer=lexer))
 
 
 def parsestream(
-    stream: str | IO[str], encoding: str | None = None
+    stream: str | IO[str],
+    encoding: str | None = None,
+    *,
+    lexer: LexerConfig | None = None,
 ) -> Generator[sql.Statement, None, None]:
     """Parses sql statements from file-like object.
 
     :param stream: A file-like object.
     :param encoding: The encoding of the stream contents (optional).
+    :param lexer: Lexical configuration (optional).
     :returns: A generator of :class:`~sqlparse.sql.Statement` instances.
     """
-    stack = engine.FilterStack()
+    lexer = _resolve_lexer(lexer)
+    stack = engine.FilterStack(lexer=lexer)
     stack.enable_grouping()
     return stack.run(stream, encoding)
 
 
-def format(sql: str, encoding: str | None = None, **options: Any) -> str:
+def format(
+    sql: str,
+    encoding: str | None = None,
+    *,
+    lexer: LexerConfig | None = None,
+    **options: Any,
+) -> str:
     """Format *sql* according to *options*.
 
     Available options are documented in :ref:`formatting`.
 
     In addition to the formatting options this function accepts the
     keyword "encoding" which determines the encoding of the statement.
+    The keyword ``lexer`` selects a lexical configuration.
 
     :returns: The formatted SQL statement as string.
     """
-    stack = engine.FilterStack()
+    lexer = _resolve_lexer(lexer)
+    stack = engine.FilterStack(lexer=lexer)
     options = formatter.validate_options(options)
     stack = formatter.build_filter_stack(stack, options)
     stack.postprocess.append(filters.SerializerUnicode())
@@ -61,7 +98,11 @@ def format(sql: str, encoding: str | None = None, **options: Any) -> str:
 
 
 def split(
-    sql: str, encoding: str | None = None, strip_semicolon: bool = False
+    sql: str,
+    encoding: str | None = None,
+    strip_semicolon: bool = False,
+    *,
+    lexer: LexerConfig | None = None,
 ) -> list[str]:
     """Split *sql* into single statements.
 
@@ -69,7 +110,9 @@ def split(
     :param encoding: The encoding of the statement (optional).
     :param strip_semicolon: If True, remove trailing semicolons
         (default: False).
+    :param lexer: Lexical configuration (optional).
     :returns: A list of strings.
     """
-    stack = engine.FilterStack(strip_semicolon=strip_semicolon)
+    lexer = _resolve_lexer(lexer)
+    stack = engine.FilterStack(strip_semicolon=strip_semicolon, lexer=lexer)
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]

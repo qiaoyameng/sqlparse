@@ -15,72 +15,66 @@ If you find an adaptation that works for your specific use-case. Please consider
 contributing it back to the community by opening a PR on
 `GitHub <https://github.com/andialbrecht/sqlparse>`_.
 
-Configuring the Lexer
+Configuring a Lexer
 ---------------------
 
-The lexer is a singleton class that breaks down the stream of characters into language
-tokens. It does this by using a sequence of regular expressions and keywords that are
-listed in the file ``sqlparse.keywords``. Instead of applying these fixed grammar
-definitions directly, the lexer is default initialized in its method called
-``default_initialization()``. As an api user, you can adapt the Lexer configuration by
-applying your own configuration logic. To do so, start out by clearing previous
-configurations with ``.clear()``, then apply the SQL list with
-``.set_SQL_REGEX(SQL_REGEX)``, and apply keyword lists with ``.add_keywords(KEYWORDS)``.
+A lexer configuration breaks down the stream of characters into language tokens.
+Configurations are immutable, while a mutable builder defines the sequence of regular
+expressions and keyword dictionaries. Regex rules run in the order supplied to the
+builder. Keyword dictionaries keep their existing first-match order, and dictionaries
+added with ``override_keywords`` take precedence over all inherited dictionaries.
 
-You can do so by re-using the expressions in ``sqlparse.keywords`` (see example below),
-leaving parts out, or by making up your own master list.
+Start from the default configuration to support multiple database dialects in the same
+process without replacing global state. Derive a builder, change only the rules that
+differ, freeze the result with ``build()``, and pass that object to ``parse``,
+``split``, or ``format``. When no configuration is supplied, those functions use the
+default configuration.
 
 See the expected types of the arguments by inspecting their structure in
 ``sqlparse.keywords``.
 
 .. important::
 
-   ``.clear()`` removes *all* keyword dictionaries. Any dictionary that is
-   not added back afterwards is no longer recognized, so make sure to re-add
-   every dictionary you rely on. The full default set is listed in
-   ``Lexer.default_initialization()``.
+   Building and parsing are separate phases. Do not change a builder while another
+   thread is using a configuration built from it; freeze the configuration first.
+   Calling ``build()`` copies the builder's rules, so later builder changes do not
+   affect already-frozen configurations.
 
-The following example adds support for the expression ``ZORDER BY``, and adds ``BAR`` as
-a keyword to the lexer:
+The following example recognizes ``ZORDER BY`` and treats ``BAR`` as a keyword:
 
 ..  code-block:: python
 
-    import re
-
     import sqlparse
     from sqlparse import keywords
-    from sqlparse.lexer import Lexer
-
-    # get the lexer singleton object to configure it
-    lex = Lexer.get_default_instance()
-
-    # Clear the default configurations.
-    # After this call, reg-exps and keyword dictionaries need to be loaded
-    # to make the lexer functional again.
-    lex.clear()
+    from sqlparse.lexer import LexerConfigBuilder
 
     my_regex = (r"ZORDER\s+BY\b", sqlparse.tokens.Keyword)
 
-    # slice the default SQL_REGEX to inject the custom object
-    lex.set_SQL_REGEX(
-        keywords.SQL_REGEX[:38]
-        + [my_regex]
-        + keywords.SQL_REGEX[38:]
+    lexer = (
+        LexerConfigBuilder.default()
+        .set_sql_regex(
+            keywords.SQL_REGEX[:38]
+            + [my_regex]
+            + keywords.SQL_REGEX[38:]
+        )
+        .override_keywords({'BAR': sqlparse.tokens.Keyword})
+        .build()
     )
 
-    # add the default keyword dictionaries
-    lex.add_keywords(keywords.KEYWORDS_COMMON)
-    lex.add_keywords(keywords.KEYWORDS_ORACLE)
-    lex.add_keywords(keywords.KEYWORDS_MYSQL)
-    lex.add_keywords(keywords.KEYWORDS_PLPGSQL)
-    lex.add_keywords(keywords.KEYWORDS_HQL)
-    lex.add_keywords(keywords.KEYWORDS_MSACCESS)
-    lex.add_keywords(keywords.KEYWORDS_SNOWFLAKE)
-    lex.add_keywords(keywords.KEYWORDS_BIGQUERY)
-    lex.add_keywords(keywords.KEYWORDS)
+    sqlparse.parse("select * from foo zorder by bar;", lexer=lexer)
 
-    # add a custom keyword dictionary
-    lex.add_keywords({'BAR': sqlparse.tokens.Keyword})
+Derive a second configuration from another one without modifying the parent:
 
-    # no configuration is passed here. The lexer is used as a singleton.
-    sqlparse.parse("select * from foo zorder by bar;")
+..  code-block:: python
+
+    from sqlparse.lexer import LexerConfig
+
+    postgresql = LexerConfig.default()
+    snowflake = (
+        postgresql.derive()
+        .override_keywords({"QUALIFY": sqlparse.tokens.Keyword})
+        .build()
+    )
+
+    sqlparse.split(sql, lexer=postgresql)
+    sqlparse.format(sql, reindent=True, lexer=snowflake)
