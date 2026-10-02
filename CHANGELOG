@@ -1,7 +1,13 @@
 Development Version
 -------------------
 
-Nothing yet.
+Notable Changes
+
+* Add `sqlparse.analyze()`, a fault-tolerant lexical analysis entry point
+  for possibly incomplete SQL (e.g. in online editors). It returns the
+  recognized tokens together with diagnostics for unterminated string
+  literals, quoted names, block comments and dollar-quoted literals, and
+  distinguishes pending input from finished input (`final=True`).
 
 
 Release 0.6.0 (Aug 13, 2026)

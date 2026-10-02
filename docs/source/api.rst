@@ -12,9 +12,26 @@ The :mod:`sqlparse` module provides the following functions on module-level.
 
 .. autofunction:: sqlparse.parse
 
+.. autofunction:: sqlparse.analyze
+
 In most cases there's no need to set the `encoding` parameter. If
 `encoding` is not set, sqlparse assumes that the given SQL statement
 is encoded either in utf-8 or latin-1.
+
+
+Fault-tolerant Lexical Analysis
+-------------------------------
+
+The :meth:`~sqlparse.analyze` function returns an
+:class:`~sqlparse.analysis.AnalysisResult` holding the recognized
+tokens together with :class:`~sqlparse.analysis.Diagnostic` objects
+describing unterminated lexical constructs.
+
+.. autoclass:: sqlparse.analysis.AnalysisResult
+   :members:
+
+.. autoclass:: sqlparse.analysis.Diagnostic
+   :members:
 
 
 .. _formatting:
