@@ -19,6 +19,30 @@ from sqlparse import keywords, tokens
 from sqlparse.utils import consume
 
 
+def coerce_to_text(text, encoding=None):
+    """Return `text` as a string.
+
+    Accepts strings, bytes (decoded using `encoding`, utf-8 or
+    unicode-escape) and file-like objects.
+    """
+    if isinstance(text, TextIOBase):
+        text = text.read()
+
+    if isinstance(text, str):
+        pass
+    elif isinstance(text, bytes):
+        if encoding:
+            text = text.decode(encoding)
+        else:
+            try:
+                text = text.decode('utf-8')
+            except UnicodeDecodeError:
+                text = text.decode('unicode-escape')
+    else:
+        raise TypeError(f"Expected text or file-like object, got {type(text)!r}")
+    return text
+
+
 class Lexer:
     """The Lexer supports configurable syntax.
     To add support for additional keywords, use the `add_keywords` method."""
@@ -116,21 +140,7 @@ class Lexer:
 
         ``stack`` is the initial stack (default: ``['root']``)
         """
-        if isinstance(text, TextIOBase):
-            text = text.read()
-
-        if isinstance(text, str):
-            pass
-        elif isinstance(text, bytes):
-            if encoding:
-                text = text.decode(encoding)
-            else:
-                try:
-                    text = text.decode('utf-8')
-                except UnicodeDecodeError:
-                    text = text.decode('unicode-escape')
-        else:
-            raise TypeError(f"Expected text or file-like object, got {type(text)!r}")
+        text = coerce_to_text(text, encoding)
 
         delimited_spans = keywords.find_delimited_spans(text)
         span_openers = delimited_spans.openers
