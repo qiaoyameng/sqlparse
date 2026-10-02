@@ -12,9 +12,26 @@ from collections.abc import Generator
 from typing import IO, Any
 
 from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse.redact import (
+    DIAGNOSTIC_NOTICE,
+    RedactionResult,
+    RedactPolicy,
+    redact,
+)
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = [
+    "cli",
+    "engine",
+    "filters",
+    "formatter",
+    "sql",
+    "tokens",
+    "redact",
+    "RedactPolicy",
+    "RedactionResult",
+    "DIAGNOSTIC_NOTICE",
+]
 
 
 def parse(

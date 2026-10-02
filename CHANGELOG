@@ -1,7 +1,19 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Add `sqlparse.redact()`, a standalone redaction interface for
+  diagnostics (e.g. slow query logs). It masks string, number and
+  boolean literals as well as large IN lists according to a
+  configurable `RedactPolicy`, handles bound parameters separately
+  from literals, removes regular comments by default and treats
+  optimizer hints according to an explicit keep/mask/remove policy.
+  Unrecognized fragments are masked conservatively. The result
+  provides masked display text and a stable shape identifier
+  (fingerprint) for aggregating statements that only differ in
+  literal values; comment and hint text never leaks into the shape
+  identifier. The output is diagnostic text, not executable SQL.
 
 
 Release 0.6.0 (Aug 13, 2026)
