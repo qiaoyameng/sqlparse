@@ -7,88 +7,86 @@
 
 """SQL Lexer"""
 import re
+from collections.abc import Mapping
+from io import TextIOBase
+from threading import Lock
+from types import MappingProxyType
 
 # This code is based on the SqlLexer in pygments.
 # http://pygments.org/
 # It's separated from the rest of pygments to increase performance
 # and to allow some customizations.
-from io import TextIOBase
-from threading import Lock
 
 from sqlparse import keywords, tokens
 from sqlparse.utils import consume
 
 
 class Lexer:
-    """The Lexer supports configurable syntax.
-    To add support for additional keywords, use the `add_keywords` method."""
+    """Immutable lexical configuration used by a parse or format call."""
+
+    __slots__ = ('_SQL_REGEX', '_raw_SQL_REGEX', '_keywords', 'frozen')
 
     _default_instance = None
-    _lock = Lock()
+    _default_instance_lock = Lock()
 
-    # Development notes:
-    # - This class is prepared to be able to support additional SQL dialects
-    #   in the future by adding additional functions that take the place of
-    #   the function default_initialization().
-    # - The lexer class uses an explicit singleton behavior with the
-    #   instance-getter method get_default_instance(). This mechanism has
-    #   the advantage that the call signature of the entry-points to the
-    #   sqlparse library are not affected. Also, usage of sqlparse in third
-    #   party code does not need to be adapted. On the other hand, the current
-    #   implementation does not easily allow for multiple SQL dialects to be
-    #   parsed in the same process.
-    #   Such behavior can be supported in the future by passing a
-    #   suitably initialized lexer object as an additional parameter to the
-    #   entry-point functions (such as `parse`). Code will need to be written
-    #   to pass down and utilize such an object. The current implementation
-    #   is prepared to support this thread safe approach without the
-    #   default_instance part needing to change interface.
+    def __init__(self, sql_regex, keyword_dicts):
+        raw_regex = tuple(sql_regex)
+        compiled_regex = []
+        flags = re.IGNORECASE | re.UNICODE
+        try:
+            for rx, token_type in raw_regex:
+                compiled_regex.append(
+                    (re.compile(rx, flags).match, token_type)
+                )
+        except (TypeError, ValueError, re.error) as err:
+            raise ValueError('Invalid SQL lexical regular expression') from err
+
+        object.__setattr__(self, '_SQL_REGEX', tuple(compiled_regex))
+        object.__setattr__(self, '_raw_SQL_REGEX', raw_regex)
+        object.__setattr__(
+            self,
+            '_keywords',
+            tuple(
+                MappingProxyType(dict(keyword_dict))
+                for keyword_dict in keyword_dicts
+            ),
+        )
+        object.__setattr__(self, 'frozen', True)
+
+    def __setattr__(self, name, value):
+        raise AttributeError('Lexer configuration is frozen')
+
+    def __delattr__(self, name):
+        raise AttributeError('Lexer configuration is frozen')
+
+    @property
+    def sql_regex(self):
+        return self._raw_SQL_REGEX
 
     @classmethod
     def get_default_instance(cls):
-        """Returns the lexer instance used internally
-        by the sqlparse core functions."""
-        with cls._lock:
+        """Return the immutable configuration used by default entry points."""
+        with cls._default_instance_lock:
             if cls._default_instance is None:
-                cls._default_instance = cls()
-                cls._default_instance.default_initialization()
-        return cls._default_instance
+                cls._default_instance = LexerBuilder.default().freeze()
+            return cls._default_instance
 
-    def default_initialization(self):
-        """Initialize the lexer with default dictionaries.
-        Useful if you need to revert custom syntax settings."""
-        self.clear()
-        self.set_SQL_REGEX(keywords.SQL_REGEX)
-        self.add_keywords(keywords.KEYWORDS_COMMON)
-        self.add_keywords(keywords.KEYWORDS_ORACLE)
-        self.add_keywords(keywords.KEYWORDS_MYSQL)
-        self.add_keywords(keywords.KEYWORDS_PLPGSQL)
-        self.add_keywords(keywords.KEYWORDS_HQL)
-        self.add_keywords(keywords.KEYWORDS_MSACCESS)
-        self.add_keywords(keywords.KEYWORDS_SNOWFLAKE)
-        self.add_keywords(keywords.KEYWORDS_BIGQUERY)
-        self.add_keywords(keywords.KEYWORDS)
+    @classmethod
+    def default(cls):
+        """Return a builder containing the default lexical rules."""
+        return LexerBuilder.default()
 
-    def clear(self):
-        """Clear all syntax configurations.
-        Useful if you want to load a reduced set of syntax configurations.
-        After this call, regexps and keyword dictionaries need to be loaded
-        to make the lexer functional again."""
-        self._SQL_REGEX = []
-        self._keywords = []
+    @classmethod
+    def builder(cls):
+        """Return a builder containing the default lexical rules."""
+        return LexerBuilder.default()
 
-    def set_SQL_REGEX(self, SQL_REGEX):
-        """Set the list of regex that will parse the SQL."""
-        FLAGS = re.IGNORECASE | re.UNICODE
-        self._SQL_REGEX = [
-            (re.compile(rx, FLAGS).match, tt)
-            for rx, tt in SQL_REGEX
-        ]
+    def derive(self):
+        """Return a builder initialized with this configuration."""
+        return LexerBuilder.from_config(self)
 
-    def add_keywords(self, keywords):
-        """Add keyword dictionaries. Keywords are looked up in the same order
-        that dictionaries were added."""
-        self._keywords.append(keywords)
+    def freeze(self):
+        return self
 
     def is_keyword(self, value):
         """Checks for a keyword.
@@ -104,18 +102,7 @@ class Lexer:
             return tokens.Name, value
 
     def get_tokens(self, text, encoding=None):
-        """
-        Return an iterable of (tokentype, value) pairs generated from
-        `text`. If `unfiltered` is set to `True`, the filtering mechanism
-        is bypassed even if filters are defined.
-
-        Also preprocess the text, i.e. expand tabs and strip it if
-        wanted and applies registered filters.
-
-        Split ``text`` into (tokentype, text) pairs.
-
-        ``stack`` is the initial stack (default: ``['root']``)
-        """
+        """Return an iterable of ``(tokentype, value)`` pairs."""
         if isinstance(text, TextIOBase):
             text = text.read()
 
@@ -137,10 +124,6 @@ class Lexer:
 
         iterable = enumerate(text)
         for pos, char in iterable:
-            # Only positions the lexer actually reaches may open a
-            # dollar-quoted literal or a multiline comment; a delimiter
-            # inside a string literal or behind a "--" comment is skipped
-            # along with its surrounding token and never resolved.
             if pos in span_openers:
                 resolved = delimited_spans.resolve(pos)
                 if resolved is not None:
@@ -165,10 +148,95 @@ class Lexer:
                 yield tokens.Error, char
 
 
-def tokenize(sql, encoding=None):
+class LexerBuilder:
+    """Build lexical rules in a predictable order and freeze them."""
+
+    def __init__(self):
+        self._sql_regex = []
+        self._keyword_dicts = []
+        self._base_config = None
+
+    @classmethod
+    def default(cls):
+        builder = cls()
+        builder.set_SQL_REGEX(keywords.SQL_REGEX)
+        for keyword_dict in (
+            keywords.KEYWORDS_COMMON,
+            keywords.KEYWORDS_ORACLE,
+            keywords.KEYWORDS_MYSQL,
+            keywords.KEYWORDS_PLPGSQL,
+            keywords.KEYWORDS_HQL,
+            keywords.KEYWORDS_MSACCESS,
+            keywords.KEYWORDS_SNOWFLAKE,
+            keywords.KEYWORDS_BIGQUERY,
+            keywords.KEYWORDS,
+        ):
+            builder.add_keywords(keyword_dict)
+        return builder
+
+    @classmethod
+    def from_config(cls, config):
+        if not isinstance(config, Lexer):
+            raise TypeError('Expected a frozen LexerConfig instance')
+        builder = cls()
+        builder._sql_regex = list(config.sql_regex)
+        builder._base_config = config
+        return builder
+
+    def clear(self):
+        self._sql_regex = []
+        self._keyword_dicts = []
+        self._base_config = None
+        return self
+
+    def set_SQL_REGEX(self, sql_regex):
+        """Set the ordered list of regular expressions that tokenizes SQL."""
+        self._sql_regex = list(sql_regex)
+        return self
+
+    def add_keywords(self, keyword_dict):
+        """Add keywords ahead of the layers inherited from the base config."""
+        if not isinstance(keyword_dict, Mapping):
+            raise TypeError('Keywords must be provided as a mapping')
+        self._keyword_dicts.append({
+            keyword.upper(): token_type
+            for keyword, token_type in keyword_dict.items()
+        })
+        return self
+
+    def add_keyword(self, keyword, token_type):
+        return self.add_keywords({keyword: token_type})
+
+    def freeze(self):
+        keyword_dicts = list(self._keyword_dicts)
+        if self._base_config is not None:
+            keyword_dicts.extend(self._base_config._keywords)
+        return Lexer(self._sql_regex, keyword_dicts)
+
+
+LexerConfig = Lexer
+LexerConfigBuilder = LexerBuilder
+
+
+def get_default_config():
+    """Return the immutable lexer configuration used by default."""
+    return Lexer.get_default_instance()
+
+
+def resolve_lexer(lexer):
+    """Return the frozen configuration for a parse or format call."""
+    if lexer is None:
+        return get_default_config()
+    if not isinstance(lexer, Lexer):
+        raise TypeError('lexer must be a frozen LexerConfig instance')
+    return lexer
+
+
+def tokenize(sql, encoding=None, *, lexer=None):
     """Tokenize sql.
 
     Tokenize *sql* using the :class:`Lexer` and return a 2-tuple stream
     of ``(token type, value)`` items.
     """
-    return Lexer.get_default_instance().get_tokens(sql, encoding)
+    lexer = resolve_lexer(lexer)
+    return lexer.get_tokens(sql, encoding)

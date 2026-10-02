@@ -18,69 +18,61 @@ contributing it back to the community by opening a PR on
 Configuring the Lexer
 ---------------------
 
-The lexer is a singleton class that breaks down the stream of characters into language
-tokens. It does this by using a sequence of regular expressions and keywords that are
-listed in the file ``sqlparse.keywords``. Instead of applying these fixed grammar
-definitions directly, the lexer is default initialized in its method called
-``default_initialization()``. As an api user, you can adapt the Lexer configuration by
-applying your own configuration logic. To do so, start out by clearing previous
-configurations with ``.clear()``, then apply the SQL list with
-``.set_SQL_REGEX(SQL_REGEX)``, and apply keyword lists with ``.add_keywords(KEYWORDS)``.
+A lexer breaks down the stream of characters into language tokens. Each
+:class:`~sqlparse.lexer.Lexer` instance is an immutable lexical configuration. Create
+one with :class:`~sqlparse.lexer.LexerBuilder`, add rules in a predictable order, then
+call ``freeze()``. Frozen configurations can be passed explicitly to
+:func:`parse`, :func:`split`, and :func:`format`, allowing several SQL dialects to be
+used in the same process without changing global state.
 
-You can do so by re-using the expressions in ``sqlparse.keywords`` (see example below),
-leaving parts out, or by making up your own master list.
-
-See the expected types of the arguments by inspecting their structure in
-``sqlparse.keywords``.
-
-.. important::
-
-   ``.clear()`` removes *all* keyword dictionaries. Any dictionary that is
-   not added back afterwards is no longer recognized, so make sure to re-add
-   every dictionary you rely on. The full default set is listed in
-   ``Lexer.default_initialization()``.
-
-The following example adds support for the expression ``ZORDER BY``, and adds ``BAR`` as
-a keyword to the lexer:
+The default entry points continue to use the shared default configuration returned by
+``Lexer.get_default_instance()``.
 
 ..  code-block:: python
 
-    import re
-
     import sqlparse
-    from sqlparse import keywords
-    from sqlparse.lexer import Lexer
+    from sqlparse import tokens
+    from sqlparse.lexer import LexerBuilder
 
-    # get the lexer singleton object to configure it
-    lex = Lexer.get_default_instance()
-
-    # Clear the default configurations.
-    # After this call, reg-exps and keyword dictionaries need to be loaded
-    # to make the lexer functional again.
-    lex.clear()
-
-    my_regex = (r"ZORDER\s+BY\b", sqlparse.tokens.Keyword)
-
-    # slice the default SQL_REGEX to inject the custom object
-    lex.set_SQL_REGEX(
-        keywords.SQL_REGEX[:38]
-        + [my_regex]
-        + keywords.SQL_REGEX[38:]
+    lexer = (
+        LexerBuilder.default()
+        .add_keyword('BAR', tokens.Keyword)
+        .freeze()
     )
 
-    # add the default keyword dictionaries
-    lex.add_keywords(keywords.KEYWORDS_COMMON)
-    lex.add_keywords(keywords.KEYWORDS_ORACLE)
-    lex.add_keywords(keywords.KEYWORDS_MYSQL)
-    lex.add_keywords(keywords.KEYWORDS_PLPGSQL)
-    lex.add_keywords(keywords.KEYWORDS_HQL)
-    lex.add_keywords(keywords.KEYWORDS_MSACCESS)
-    lex.add_keywords(keywords.KEYWORDS_SNOWFLAKE)
-    lex.add_keywords(keywords.KEYWORDS_BIGQUERY)
-    lex.add_keywords(keywords.KEYWORDS)
+    sqlparse.parse('select bar', lexer=lexer)
+    sqlparse.split('select bar;', lexer=lexer)
+    sqlparse.format('select bar', keyword_case='upper', lexer=lexer)
 
-    # add a custom keyword dictionary
-    lex.add_keywords({'BAR': sqlparse.tokens.Keyword})
+Derived configurations start from an existing frozen lexer without mutating it. Layers
+added on the derived builder take precedence over layers inherited from the parent.
 
-    # no configuration is passed here. The lexer is used as a singleton.
-    sqlparse.parse("select * from foo zorder by bar;")
+..  code-block:: python
+
+    parent = LexerBuilder.default().add_keyword('BAR', tokens.Name).freeze()
+    child = parent.derive().add_keyword('BAR', tokens.Keyword).freeze()
+
+    assert next(parent.get_tokens('bar'))[0] == tokens.Name
+    assert next(child.get_tokens('bar'))[0] == tokens.Keyword
+
+Regular expression rules can also be replaced before freezing. Use
+``set_SQL_REGEX()`` with the ordered expressions in ``sqlparse.keywords``, or make a
+copy of an existing frozen lexer's ``sql_regex`` and insert a new expression at the
+required position.
+
+..  code-block:: python
+
+    from sqlparse import keywords, tokens
+
+    zorder_regex = (r'ZORDER\s+BY\b', tokens.Keyword)
+    lexer = (
+        LexerBuilder.default()
+        .set_SQL_REGEX(
+            keywords.SQL_REGEX[:38]
+            + [zorder_regex]
+            + keywords.SQL_REGEX[38:]
+        )
+        .freeze()
+    )
+
+    sqlparse.parse('select * from foo zorder by bar;', lexer=lexer)

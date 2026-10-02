@@ -7,12 +7,14 @@
 
 from sqlparse import sql
 from sqlparse import tokens as T
+from sqlparse.lexer import resolve_lexer
 
 
 class StatementSplitter:
     """Filter that split stream at individual statements"""
 
-    def __init__(self):
+    def __init__(self, lexer=None):
+        self.lexer = resolve_lexer(lexer)
         self._reset()
 
     def _reset(self):
