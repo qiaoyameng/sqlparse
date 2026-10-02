@@ -1,7 +1,13 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Added ``format_toggle`` option to ``sqlparse.format()`` (enabled by
+  default). Regions enclosed by paired ``-- sqlparse: off`` /
+  ``-- sqlparse: on`` toggle comments are kept byte-for-byte during
+  formatting. Pass ``format_toggle=False`` to restore the previous
+  behavior.
 
 
 Release 0.6.0 (Aug 13, 2026)

@@ -84,6 +84,16 @@ The :meth:`~sqlparse.format` function accepts the following keyword arguments.
 ``comma_first``
   If ``True`` comma-first notation for column names is used.
 
+``format_toggle`` (default: True)
+  If ``True``, regions enclosed by paired toggle comments are excluded
+  from formatting and kept byte-for-byte. A region starts with a
+  standalone ``-- sqlparse: off`` comment (``#`` and ``/* ... */`` style
+  comments work as well) and ends with the matching ``-- sqlparse: on``
+  comment. Toggles are only recognized in comments; the same text inside
+  a string literal has no effect. Regions don't nest, an unclosed region
+  extends to the end of the input, and regions may span multiple
+  statements.
+
 
 Security and Performance Considerations
 ---------------------------------------

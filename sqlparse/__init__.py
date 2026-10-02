@@ -53,8 +53,12 @@ def format(sql: str, encoding: str | None = None, **options: Any) -> str:
 
     :returns: The formatted SQL statement as string.
     """
-    stack = engine.FilterStack()
     options = formatter.validate_options(options)
+    if options['format_toggle'] and isinstance(sql, str):
+        spans = formatter.find_protected_spans(sql)
+        if spans:
+            return formatter.format_with_toggles(sql, spans, options)
+    stack = engine.FilterStack()
     stack = formatter.build_filter_stack(stack, options)
     stack.postprocess.append(filters.SerializerUnicode())
     return "".join(stack.run(sql, encoding))

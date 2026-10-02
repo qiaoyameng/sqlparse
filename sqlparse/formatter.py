@@ -7,8 +7,16 @@
 
 """SQL formatter"""
 
+import re
+
+from sqlparse import engine
 from sqlparse import filters
+from sqlparse import lexer
+from sqlparse import tokens as T
 from sqlparse.exceptions import SQLParseError
+
+
+_TOGGLE_RE = re.compile(r'sqlparse\s*:\s*(off|on)', re.IGNORECASE)
 
 
 def validate_options(options):
@@ -116,6 +124,11 @@ def validate_options(options):
         raise SQLParseError('comma_first requires a boolean value')
     options['comma_first'] = comma_first
 
+    format_toggle = options.get('format_toggle', True)
+    if format_toggle not in [True, False]:
+        raise SQLParseError('format_toggle requires a boolean value')
+    options['format_toggle'] = format_toggle
+
     compact = options.get('compact', False)
     if compact not in [True, False]:
         raise SQLParseError('compact requires a boolean value')
@@ -202,3 +215,120 @@ def build_filter_stack(stack, options):
             stack.postprocess.append(fltr)
 
     return stack
+
+
+def _toggle_action(ttype, value):
+    """Return 'off' or 'on' if the token is a format toggle comment.
+
+    Only standalone comments whose whole body is the directive are
+    recognized. The same text inside a string literal is never seen here
+    because the lexer doesn't tokenize it as a comment.
+    """
+    if ttype not in (T.Comment.Single, T.Comment.Multiline):
+        return None
+    body = value.strip()
+    if body.startswith('--'):
+        body = body[2:]
+    elif body.startswith('#'):
+        body = body[1:]
+    elif body.startswith('/*') and body.endswith('*/'):
+        body = body[2:-2]
+    else:
+        return None
+    match = _TOGGLE_RE.fullmatch(body.strip())
+    return match.group(1).lower() if match else None
+
+
+def _line_start(text, pos):
+    """Return the start position of a toggle comment's protected region.
+
+    Leading spaces and tabs of the comment's line as well as the preceding
+    newline are included so that the comment keeps its line position when
+    the surrounding SQL is reformatted.
+    """
+    while pos > 0 and text[pos - 1] in ' \t':
+        pos -= 1
+    if pos > 0 and text[pos - 1] == '\n':
+        pos -= 1
+        if pos > 0 and text[pos - 1] == '\r':
+            pos -= 1
+    return pos
+
+
+def find_protected_spans(text):
+    """Return character spans of *text* protected by format toggle comments.
+
+    A protected span starts at the beginning of the line of an
+    ``sqlparse: off`` comment and ends right after the matching
+    ``sqlparse: on`` comment. The following rules apply:
+
+    * toggles are only recognized in standalone comments, the same text in
+      a string literal has no effect;
+    * regions don't nest: an ``off`` toggle inside a protected region is
+      plain text and the first ``on`` toggle ends the region;
+    * an ``on`` toggle without a preceding ``off`` toggle is a plain
+      comment;
+    * a region that isn't closed protects everything up to the end of the
+      input;
+    * regions may span multiple statements.
+    """
+    if 'sqlparse' not in text.lower():
+        return []
+    spans = []
+    pos = 0
+    start = None
+    for ttype, value in lexer.tokenize(text):
+        token_start, pos = pos, pos + len(value)
+        action = _toggle_action(ttype, value)
+        if start is None:
+            if action == 'off':
+                # Never overlap with the previous region, which may own the
+                # newline this region would otherwise extend into.
+                start = max(_line_start(text, token_start),
+                            spans[-1][1] if spans else 0)
+        elif action == 'on':
+            spans.append((start, pos))
+            start = None
+    if start is not None:
+        spans.append((start, len(text)))
+    return spans
+
+
+def _format_segment(segment, options):
+    # Each segment is formatted with a fresh filter stack so that stateful
+    # filters (e.g. ReindentFilter tracks the previous statement) don't
+    # leak state across protected regions.
+    stack = build_filter_stack(engine.FilterStack(), options)
+    stack.postprocess.append(filters.SerializerUnicode())
+    return ''.join(stack.run(segment))
+
+
+def format_with_toggles(text, spans, options):
+    """Format *text* while keeping the given *spans* byte-for-byte intact.
+
+    *options* must be validated by :func:`validate_options`.
+    """
+    chunks = []
+    last_char = ''
+
+    def append(chunk, formattable):
+        nonlocal last_char
+        if formattable:
+            chunk = _format_segment(chunk, options)
+        if not chunk:
+            return
+        if last_char and not last_char.isspace() and not chunk[0].isspace():
+            # Formatting may have stripped the whitespace that separated
+            # the last token from the protected region. Insert a space so
+            # that two tokens are never glued together at the boundary.
+            chunks.append(' ')
+        chunks.append(chunk)
+        last_char = chunk[-1]
+
+    prev = 0
+    for start, end in spans:
+        append(text[prev:start], True)
+        append(text[start:end], False)
+        prev = end
+    append(text[prev:], True)
+    return ''.join(chunks)
