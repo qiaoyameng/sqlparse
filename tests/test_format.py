@@ -800,3 +800,138 @@ def test_strip_ws_removes_trailing_ws_in_groups():  # issue782
                                 strip_whitespace=True)
     expected = '(where foo = bar) from'
     assert formatted == expected
+
+
+class TestProtectedRegions:
+    @staticmethod
+    def format_twice(sql, **options):
+        options.setdefault('reindent', True)
+        options.setdefault('keyword_case', 'upper')
+        first = sqlparse.format(sql, **options)
+        second = sqlparse.format(first, **options)
+        return first, second
+
+    @staticmethod
+    def region(sql, start='-- fmt: off\n', end='\n-- fmt: on',
+               closing=False):
+        start_index = sql.index(start) + len(start)
+        end_position = (sql.rindex(end) if closing
+                        else sql.index(end, start_index))
+        end_index = end_position + 1
+        return sql[start_index:end_index]
+
+    def test_preserves_region_bytes_and_idempotence(self):
+        sql = (
+            'select a,b\n'
+            '-- fmt: off\n'
+            'select  c   ,\n'
+            '\td   -- comment\n'
+            '\n'
+            '-- fmt: on\n'
+            'from t;\n'
+        )
+
+        first, second = self.format_twice(sql)
+
+        assert self.region(first) == 'select  c   ,\n\td   -- comment\n\n'
+        assert first == second
+        assert first.startswith('SELECT a,\n       b -- fmt: off\n')
+        assert first.endswith('-- fmt: on\nFROM t;')
+
+    def test_ignores_directive_text_in_strings(self):
+        sql = "select '-- fmt: off' as note, a,b from t\n"
+
+        first, second = self.format_twice(sql)
+
+        assert first == second
+        assert first == (
+            "SELECT '-- fmt: off' AS note,\n       a,\n       b\nFROM t")
+
+    def test_nested_directives_form_one_region(self):
+        sql = (
+            '-- fmt: off\n'
+            'select a\n'
+            '-- fmt: off\n'
+            'select b\n'
+            '-- fmt: on\n'
+            'select c\n'
+            '-- fmt: on\n'
+            'select d;\n'
+        )
+
+        first, second = self.format_twice(sql)
+
+        assert first == second
+        assert self.region(first, closing=True) == (
+            'select a\n'
+            '-- fmt: off\n'
+            'select b\n'
+            '-- fmt: on\n'
+            'select c\n')
+        assert first.endswith('-- fmt: on\n\nSELECT d;')
+
+    @pytest.mark.parametrize('sql', [
+        '-- fmt: off\nselect a,b\nselect c;\n',
+        '-- fmt: on\nselect a,b;\n',
+    ])
+    def test_unpaired_directives_are_idempotent(self, sql):
+        first, second = self.format_twice(sql)
+        assert first == second
+
+    def test_region_may_cross_statements(self):
+        sql = (
+            'select a;\n\n'
+            '-- fmt: off\n'
+            'select  b;\n\n'
+            '-- fmt: on\n'
+            'select c;\n'
+        )
+
+        first, second = self.format_twice(sql)
+
+        assert first == second
+        assert self.region(first) == 'select  b;\n\n'
+        assert first == (
+            'SELECT a;\n\n'
+            '-- fmt: off\n'
+            'select  b;\n\n'
+            '-- fmt: on\n\n'
+            'SELECT c;')
+
+    def test_multiline_directives_and_block_boundaries(self):
+        sql = (
+            'select a,b /* fmt: off */ raw   x /* fmt: on */ from t;\n'
+            '/* fmt:\n off */\n'
+            'select  y  ;\n'
+            '/* fmt:\n on */\n'
+        )
+
+        first, second = self.format_twice(sql)
+
+        assert first == second
+        assert 'b /* fmt: off */ raw   x /* fmt: on */\nFROM t' in first
+        assert 'select  y  ;' in first
+
+    def test_can_disable_region_preservation(self):
+        sql = (
+            'select a\n'
+            '-- fmt: off\n'
+            'select b\n'
+            '-- fmt: on\n'
+            'from t;\n'
+        )
+
+        expected = (
+            'SELECT a -- fmt: off\n\n'
+            'SELECT b -- fmt: on\n'
+            'FROM t;')
+
+        first, second = self.format_twice(
+            sql, preserve_format_regions=False)
+
+        assert first == expected
+        assert second == expected
+
+    def test_invalid_preserve_format_regions_option(self):
+        with pytest.raises(SQLParseError):
+            sqlparse.format('select 1', preserve_format_regions='yes')

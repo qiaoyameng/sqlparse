@@ -84,6 +84,16 @@ The :meth:`~sqlparse.format` function accepts the following keyword arguments.
 ``comma_first``
   If ``True`` comma-first notation for column names is used.
 
+``preserve_format_regions`` (default: ``True``)
+  If ``True``, text between independent ``-- fmt: off`` and ``-- fmt: on``
+  comments (or the equivalent ``# fmt: off`` and block-comment forms) is
+  emitted unchanged. This preserves manual alignment, tabs, blank lines, and
+  comments inside the region. Nested ``off`` directives require a matching
+  nested ``on``; an unmatched ``off`` protects to the end of the input, while
+  an unmatched ``on`` is treated as a normal comment. Set the option to
+  ``False`` to ignore these directives and use the regular formatting
+  behavior.
+
 
 Security and Performance Considerations
 ---------------------------------------

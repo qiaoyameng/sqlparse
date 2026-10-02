@@ -8,11 +8,18 @@
 """SQL formatter"""
 
 from sqlparse import filters
+from sqlparse.filters.protected_regions import ProtectedRegionFilter
 from sqlparse.exceptions import SQLParseError
 
 
 def validate_options(options):
     """Validates options."""
+    preserve_format_regions = options.get('preserve_format_regions', True)
+    if preserve_format_regions not in [True, False]:
+        raise SQLParseError('Invalid value for preserve_format_regions: '
+                            f'{preserve_format_regions!r}')
+    options['preserve_format_regions'] = preserve_format_regions
+
     kwcase = options.get('keyword_case')
     if kwcase not in [None, 'upper', 'lower', 'capitalize']:
         raise SQLParseError('Invalid value for keyword_case: '
@@ -141,7 +148,10 @@ def build_filter_stack(stack, options):
       stack: :class:`~sqlparse.filters.FilterStack` instance
       options: Dictionary with options validated by validate_options.
     """
-    # Token filter
+    # Token filters
+    if options.get('preserve_format_regions', True):
+        stack.preprocess.append(ProtectedRegionFilter())
+
     if options.get('keyword_case'):
         stack.preprocess.append(
             filters.KeywordCaseFilter(options['keyword_case']))

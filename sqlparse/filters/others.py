@@ -33,6 +33,7 @@ class StripCommentsFilter:
                 return sql.Token(T.Whitespace, ' ')
 
         sql_hints = (T.Comment.Multiline.Hint, T.Comment.Single.Hint)
+        from sqlparse.filters.protected_regions import ProtectedRegionFilter
         tidx, token = get_next_comment()
         while token:
             # skipping token remove if token is a SQL-Hint. issue262
@@ -49,6 +50,19 @@ class StripCommentsFilter:
                 # using current index as start index to search next token for
                 # preventing infinite loop in cases when token type is a
                 # "SQL-Hint" and has to be skipped
+                tidx, token = get_next_comment(idx=tidx)
+                continue
+
+            directive_token = token
+            if isinstance(token, sql.Comment):
+                is_directive = any(
+                    ProtectedRegionFilter._directive(
+                        comment_token.ttype, comment_token.value)
+                    for comment_token in token.flatten())
+            else:
+                is_directive = bool(ProtectedRegionFilter._directive(
+                    directive_token.ttype, directive_token.value))
+            if is_directive:
                 tidx, token = get_next_comment(idx=tidx)
                 continue
 
@@ -89,11 +103,22 @@ class StripWhitespaceFilter:
 
     @staticmethod
     def _stripws_default(tlist):
+        tokens = tlist.tokens
+        protected_indexes = set()
+        for index, token in enumerate(tokens):
+            if token.ttype in T.Other.Protected:
+                if index > 0:
+                    protected_indexes.add(index - 1)
+                if index + 1 < len(tokens):
+                    protected_indexes.add(index + 1)
+
         last_was_ws = False
         is_first_char = True
-        for token in tlist.tokens:
+        for index, token in enumerate(tokens):
             if token.is_whitespace:
-                token.value = '' if last_was_ws or is_first_char else ' '
+                if index not in protected_indexes:
+                    token.value = (
+                        '' if last_was_ws or is_first_char else ' ')
             last_was_ws = token.is_whitespace
             is_first_char = False
 
@@ -170,5 +195,45 @@ class StripTrailingSemicolonFilter:
 class SerializerUnicode:
     @staticmethod
     def process(stmt):
+        protected_ttype = T.Other.Protected
+        if any(token.ttype in protected_ttype
+               for token in stmt.flatten()):
+            return SerializerUnicode._serialize_protected(stmt)
+
         lines = split_unquoted_newlines(stmt)
         return '\n'.join(line.rstrip() for line in lines)
+
+    @staticmethod
+    def _serialize_protected(stmt):
+        result = []
+        line = []
+        protected_ttype = T.Other.Protected
+        at_line_start = True
+
+        for token in stmt.flatten():
+            if token.ttype in protected_ttype:
+                if line:
+                    result.append(''.join(line).rstrip())
+                line.clear()
+                result.append(token.value)
+                at_line_start = token.value.endswith(('\r\n', '\r', '\n'))
+                line = []
+                continue
+
+            parts = re.split(r'(\r\n|\r|\n)', token.value)
+            for part in parts:
+                if re.fullmatch(r'\r\n|\r|\n', part):
+                    if not at_line_start or line:
+                        result.append(''.join(line).rstrip())
+                    line.clear()
+                    result.append('\n')
+                    at_line_start = True
+                else:
+                    if at_line_start:
+                        line = []
+                        at_line_start = False
+                    line.append(part)
+
+        if not at_line_start or line:
+            result.append(''.join(line).rstrip())
+        return ''.join(result)

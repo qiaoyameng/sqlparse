@@ -27,7 +27,7 @@ class OutputFilter:
             varname = self.varname
 
         has_nl = len(str(stmt).strip().splitlines()) > 1
-        stmt.tokens = self._process(stmt.tokens, varname, has_nl)
+        stmt.tokens = list(self._process(stmt.tokens, varname, has_nl))
         return stmt
 
 

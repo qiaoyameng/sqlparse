@@ -1,7 +1,10 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Add support for preserving SQL between paired ``fmt: off`` and ``fmt: on``
+  formatting comments with the ``preserve_format_regions`` option.
 
 
 Release 0.6.0 (Aug 13, 2026)
