@@ -10,3 +10,7 @@
 
 class SQLParseError(Exception):
     """Base class for exceptions in this module."""
+
+
+class ParameterStyleError(SQLParseError):
+    """Raised when a parameter style conversion cannot be performed."""

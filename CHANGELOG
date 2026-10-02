@@ -1,7 +1,13 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Add ``sqlparse.params`` module with ``to_qmark()`` and ``to_named()``
+  helpers for explicit conversion between named and positional parameter
+  placeholder styles.  The helpers return the rewritten SQL together with
+  the reordered parameter values and never interpolate values into the
+  SQL text.
 
 
 Release 0.6.0 (Aug 13, 2026)

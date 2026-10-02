@@ -17,6 +17,23 @@ In most cases there's no need to set the `encoding` parameter. If
 is encoded either in utf-8 or latin-1.
 
 
+.. _param_styles:
+
+Converting Parameter Placeholder Styles
+---------------------------------------
+
+The :mod:`sqlparse.params` module converts SQL between named and
+positional parameter placeholder styles without interpolating values
+into the SQL text.  Both functions return the rewritten SQL together
+with the reordered parameter values and raise
+:class:`sqlparse.exceptions.ParameterStyleError` when the statement
+mixes placeholder styles or when values are missing or unused.
+
+.. autofunction:: sqlparse.params.to_qmark
+
+.. autofunction:: sqlparse.params.to_named
+
+
 .. _formatting:
 
 Formatting of SQL Statements
