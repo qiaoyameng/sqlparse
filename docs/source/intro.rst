@@ -36,6 +36,40 @@ The end of a statement is identified by the occurrence of a semicolon.
 Semicolons within certain SQL constructs like ``BEGIN ... END`` blocks
 are handled correctly by the splitting mechanism.
 
+Scripts exported by MySQL often switch the statement terminator with the
+client-side ``DELIMITER`` command so that the semicolons inside a stored
+procedure stay part of the ``CREATE PROCEDURE`` statement.  Use
+:meth:`~sqlparse.split_script` for such scripts:
+
+.. code-block:: python
+
+  >>> script = '''
+  ... DELIMITER $$
+  ... CREATE PROCEDURE p()
+  ... BEGIN
+  ...   SELECT 1;
+  ... END$$
+  ... DELIMITER ;
+  ... SELECT 2;
+  ... '''
+  >>> for item in sqlparse.split_script(script):
+  ...     print(type(item).__name__, item.is_directive)
+  DelimiterDirective True
+  SqlStatement False
+  DelimiterDirective True
+  SqlStatement False
+
+Directives are only recognized between statements; the word ``DELIMITER``
+inside strings, quoted identifiers or comments is ordinary content.  The
+delimiter may be switched repeatedly and may consist of multiple
+characters.  The returned items preserve the original text and expose the
+active delimiter (``item.delimiter`` / ``item.new_delimiter``).  Invalid
+or unterminated directives raise an error with a locatable line and
+column.  For streaming use, feed arbitrary chunks (even single
+characters) to :class:`~sqlparse.script.ScriptSplitter`; the resulting
+boundaries are identical to feeding the whole script at once.  The
+regular :meth:`~sqlparse.split` behavior is unchanged.
+
 SQL statements can be beautified by using the :meth:`~sqlparse.format` function.
 
 .. code-block:: python

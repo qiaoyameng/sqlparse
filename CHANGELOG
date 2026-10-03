@@ -1,7 +1,19 @@
 Development Version
 -------------------
 
-Nothing yet.
+Enhancements
+
+* Add an explicit script-splitting mode for MySQL-style ``DELIMITER``
+  directives: ``sqlparse.split_script()`` and the streaming
+  ``sqlparse.script.ScriptSplitter``.  The active statement terminator can
+  be switched any number of times, including to a multi-character sequence
+  such as ``$$``, so stored procedure bodies stay intact.  Directives are
+  only recognized between statements -- occurrences inside strings,
+  backtick/double-quoted identifiers and comments are ordinary content.
+  Feeding a script one character (or arbitrary chunks) at a time yields the
+  same statement boundaries as feeding it at once.  Invalid or unterminated
+  directives raise ``SQLParseError`` with a locatable line, column and
+  offset.  The regular ``sqlparse.split()`` behavior is unchanged.
 
 
 Release 0.6.0 (Aug 13, 2026)

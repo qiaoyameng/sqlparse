@@ -12,9 +12,11 @@ from collections.abc import Generator
 from typing import IO, Any
 
 from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse import script as script_module
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = ["cli", "engine", "filters", "formatter", "script_module",
+           "sql", "tokens"]
 
 
 def parse(
@@ -73,3 +75,33 @@ def split(
     """
     stack = engine.FilterStack(strip_semicolon=strip_semicolon)
     return [str(stmt).strip() for stmt in stack.run(sql, encoding)]
+
+
+def split_script(
+    script: str,
+    encoding: str | None = None,
+    delimiter: str = ";",
+    strip: bool = True,
+) -> list[script_module.ScriptItem]:
+    """Split *script* into SQL statements and ``DELIMITER`` directives.
+
+    Explicit script-splitting mode that understands MySQL client
+    ``DELIMITER`` directives.  Unlike :meth:`split`, statements inside
+    stored procedures stay intact when the terminator is switched to a
+    multi-character sequence such as ``$$``.  Directives are only
+    recognized between statements; occurrences inside strings, quoted
+    identifiers and comments are ordinary content.
+
+    :param script: A string containing SQL statements and directives.
+    :param encoding: Encoding used when *script* is bytes (optional).
+    :param delimiter: Initial statement terminator (default ``";"``).
+    :param strip: If True (default), SQL statement values are stripped of
+        surrounding whitespace; directive values are never stripped.
+    :returns: A list of :class:`~sqlparse.script.SqlStatement` and
+        :class:`~sqlparse.script.DelimiterDirective` items.  Check
+        ``item.is_directive`` to distinguish the two kinds.
+    :raises exceptions.SQLParseError: for invalid or unterminated
+        directives, with line, column and offset in the message.
+    """
+    return script_module.split(script, encoding=encoding,
+                               delimiter=delimiter, strip=strip)
