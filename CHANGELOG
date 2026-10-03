@@ -1,7 +1,22 @@
 Development Version
 -------------------
 
-Nothing yet.
+New Features
+
+* Add an explicit script splitting mode for client scripts that switch
+  the statement terminator with a MySQL style ``DELIMITER`` directive
+  (e.g. mysqldump exports containing stored procedures). The new
+  :func:`sqlparse.split_script` returns :class:`~sqlparse.ScriptSegment`
+  items that distinguish ``DELIMITER`` directives from SQL statements
+  while preserving the original text. Directives are only recognized
+  between statements; the same word in strings, quoted identifiers or
+  comments is treated as ordinary content. Multi-character delimiters
+  and repeated switches are supported. The streaming
+  :class:`~sqlparse.ScriptSplitter` accepts a script in arbitrary
+  chunks (even one character at a time) and yields the same boundaries
+  as a single call. Malformed or unterminated directives raise
+  :class:`~sqlparse.DelimiterError` with line/column information. The
+  existing :func:`sqlparse.split` behavior is unchanged.
 
 
 Release 0.6.0 (Aug 13, 2026)

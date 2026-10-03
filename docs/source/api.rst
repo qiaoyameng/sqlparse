@@ -8,6 +8,16 @@ The :mod:`sqlparse` module provides the following functions on module-level.
 
 .. autofunction:: sqlparse.split
 
+.. autofunction:: sqlparse.split_script
+
+.. autofunction:: sqlparse.split_script_statements
+
+.. autoclass:: sqlparse.ScriptSegment
+   :members:
+
+.. autoclass:: sqlparse.ScriptSplitter
+   :members:
+
 .. autofunction:: sqlparse.format
 
 .. autofunction:: sqlparse.parse

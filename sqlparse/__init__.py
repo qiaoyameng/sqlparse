@@ -12,9 +12,29 @@ from collections.abc import Generator
 from typing import IO, Any
 
 from sqlparse import cli, engine, filters, formatter, sql, tokens
+from sqlparse.exceptions import DelimiterError, SQLParseError
+from sqlparse.script_split import (
+    ScriptSegment,
+    ScriptSplitter,
+    split_script,
+    split_script_statements,
+)
 
 __version__ = "0.6.1.dev0"
-__all__ = ["cli", "engine", "filters", "formatter", "sql", "tokens"]
+__all__ = [
+    "cli",
+    "DelimiterError",
+    "engine",
+    "filters",
+    "formatter",
+    "ScriptSegment",
+    "ScriptSplitter",
+    "split_script",
+    "split_script_statements",
+    "SQLParseError",
+    "sql",
+    "tokens",
+]
 
 
 def parse(
